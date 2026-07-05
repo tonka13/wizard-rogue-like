@@ -203,6 +203,7 @@ addEventListener('keydown', e => {
   keys[e.key.toLowerCase()] = true;
   if (['arrowup','arrowdown','arrowleft','arrowright',' '].includes(e.key.toLowerCase())) e.preventDefault();
   if (e.key === 'Enter') onConfirm();
+  if (e.key === 'Escape') togglePause();
   if (game.state === 'upgrade' && ['1','2','3'].includes(e.key)) tryBuy(+e.key - 1);
 });
 addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
@@ -233,6 +234,7 @@ function axis() {
 //======================================================================
 const game = {
   state: 'menu',      // menu | play | boss | upgrade | stats
+  paused: false,
   stateTime: 0,
   segment: 0,
   segProgress: 0,     // scroll px within current segment
@@ -273,7 +275,11 @@ function resetRun() {
   boss = null;
 }
 
-function setState(s) { game.state = s; game.stateTime = 0; }
+function setState(s) { game.state = s; game.stateTime = 0; game.paused = false; }
+
+function togglePause() {
+  if (game.state === 'play' || game.state === 'boss') game.paused = !game.paused;
+}
 
 function startRun() {
   resetRun();
@@ -441,6 +447,7 @@ function killBoss() {
   const cheapest = cheapestAvailableCost();
   const drop = Math.max(cheapest - game.gems, 0) + CONFIG.bossGemBase(game.segment);
   spawnGems(boss.x, boss.y, drop, true);
+  for (const g of gems) g.bossGem = true;   // leftover field gems fly in too
   deathPuff(boss.x, boss.y, '#e04545');
   deathPuff(boss.x, boss.y, '#ffd545');
   addShake(14, 0.6);
@@ -456,6 +463,7 @@ const hit = (a, b) => dist2(a.x, a.y, b.x, b.y) < (a.r + b.r) ** 2;
 // UPDATE
 //======================================================================
 function update(dt) {
+  if (game.paused) return;
   game.stateTime += dt;
   if (game.banner) { game.banner.t -= dt; if (game.banner.t <= 0) game.banner = null; }
   if (shake.t > 0) { shake.t -= dt; if (shake.t <= 0) shake.mag = 0; }
@@ -479,7 +487,7 @@ function update(dt) {
         game.spawnTimer = CONFIG.spawnInterval(game.segment, prog);
       }
       if (game.segProgress >= CONFIG.segmentLength(game.segment)) spawnBoss();
-    } else {
+    } else if (game.state === 'boss') {   // re-check: death this frame must not fall through to the shop
       updateBoss(dt);
       updateBossBullets(dt);
       // boss killed → shop (after gems fly in)
@@ -881,6 +889,12 @@ function render() {
       drawFloor();
       drawEntities();
       drawHUD();
+      if (game.paused) {
+        ctx.fillStyle = 'rgba(7,6,13,0.65)';
+        ctx.fillRect(0, 0, W, H);
+        drawText('PAUSED', W / 2, H * 0.45, 36, '#ffd545');
+        drawText('ESC to resume', W / 2, H * 0.45 + 40, 16, '#8a86a8');
+      }
   }
   ctx.restore();
 }
